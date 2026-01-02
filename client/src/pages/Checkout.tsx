@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { toast } from "sonner";
 
 /**
  * Checkout page with payment processing
@@ -29,11 +30,11 @@ export default function Checkout() {
   const createIntentMutation = trpc.payments.createIntent.useMutation();
   const confirmPaymentMutation = trpc.payments.confirm.useMutation({
     onSuccess: () => {
-      alert("Payment successful! Your order has been confirmed.");
-      setLocation("/orders");
+      toast.success("Payment processed successfully!");
+      setLocation(`/order-confirmation/${orderId}`);
     },
     onError: (error) => {
-      alert(`Payment failed: ${error.message}`);
+      toast.error(`Payment failed: ${error.message}`);
       setIsProcessing(false);
     },
   });
@@ -42,12 +43,12 @@ export default function Checkout() {
     e.preventDefault();
 
     if (!cardNumber || !expiryDate || !cvc) {
-      alert("Please fill in all payment details");
+      toast.error("Please fill in all payment details");
       return;
     }
 
     if (!order) {
-      alert("Order not found");
+      toast.error("Order not found");
       return;
     }
 

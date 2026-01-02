@@ -6,6 +6,7 @@ import { Trash2, Plus, Minus, ChevronLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { toast } from "sonner";
 
 /**
  * Shopping cart page
@@ -23,23 +24,42 @@ export default function Cart() {
 
   // Mutations
   const updateItemMutation = trpc.cart.updateItem.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      refetch();
+      toast.success("Cart updated successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to update cart: ${error.message}`);
+    },
   });
 
   const removeItemMutation = trpc.cart.removeItem.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      refetch();
+      toast.success("Item removed from cart");
+    },
+    onError: (error) => {
+      toast.error(`Failed to remove item: ${error.message}`);
+    },
   });
 
   const clearCartMutation = trpc.cart.clear.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      refetch();
+      toast.success("Cart cleared successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to clear cart: ${error.message}`);
+    },
   });
 
   const createOrderMutation = trpc.orders.create.useMutation({
     onSuccess: (order) => {
+      toast.success("Order created successfully");
       setLocation(`/checkout/${order.id}`);
     },
     onError: (error) => {
-      alert(`Error: ${error.message}`);
+      toast.error(`Failed to create order: ${error.message}`);
     },
   });
 

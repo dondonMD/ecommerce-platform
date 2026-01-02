@@ -370,6 +370,9 @@ export const appRouter = router({
             },
           });
 
+          // Store payment intent ID in the order
+          await db.updateOrder(input.orderId, { stripePaymentIntentId: paymentIntent.id });
+
           return {
             clientSecret: paymentIntent.client_secret,
             publishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY,
@@ -446,11 +449,19 @@ export const appRouter = router({
     // Get dashboard stats
     stats: adminProcedure
       .query(async () => {
-        // Placeholder - returns empty for now
+        // Get total products
+        const totalProducts = await db.getTotalProducts();
+        
+        // Get total orders
+        const totalOrders = await db.getTotalOrders();
+        
+        // Get total revenue
+        const totalRevenue = await db.getTotalRevenue();
+        
         return {
-          totalProducts: 0,
-          totalOrders: 0,
-          totalRevenue: 0,
+          totalProducts,
+          totalOrders,
+          totalRevenue: totalRevenue.toFixed(2),
         };
       }),
 

@@ -30,7 +30,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen bg-linear-to-b from-slate-50 to-white">
       {/* Navigation */}
       <nav className="border-b border-slate-200 bg-white sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -84,7 +84,7 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <div className="bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl h-96 flex items-center justify-center">
+          <div className="bg-linear-to-br from-blue-100 to-purple-100 rounded-2xl h-96 flex items-center justify-center">
             <div className="text-center">
               <ShoppingCart className="w-24 h-24 text-blue-600 mx-auto mb-4" />
               <p className="text-slate-600">Featured Products</p>
@@ -124,9 +124,9 @@ export default function Home() {
             <Card
               key={product.id}
               className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => setLocation(`/product/${product.id}`)}
+              onClick={() => setLocation(`/products/${product.id}`)}
             >
-              <div className="bg-gradient-to-br from-slate-200 to-slate-300 h-48 flex items-center justify-center">
+              <div className="bg-linear-to-br from-slate-200 to-slate-300 h-48 flex items-center justify-center">
                 {product.imageUrl ? (
                   <img
                     src={product.imageUrl}
@@ -189,7 +189,7 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-16">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-12 text-white text-center">
+        <div className="bg-linear-to-r from-blue-600 to-purple-600 rounded-2xl p-12 text-white text-center">
           <h3 className="text-3xl font-bold mb-4">Ready to Shop?</h3>
           <p className="text-lg mb-8 opacity-90">
             Explore our full collection of premium products

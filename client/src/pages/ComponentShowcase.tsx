@@ -189,7 +189,7 @@ export default function ComponentsShowcase() {
 
   // AI ChatBox demo state
   const [chatMessages, setChatMessages] = useState<Message[]>([
-    { role: "system", content: "You are a helpful assistant." },
+    { id: "1", role: "assistant", content: "You are a helpful assistant.", timestamp: new Date() },
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
@@ -209,21 +209,33 @@ export default function ComponentsShowcase() {
     }
   };
 
-  const handleChatSend = (content: string) => {
+  const handleChatSend = async (content: string): Promise<string> => {
     // Add user message
-    const newMessages: Message[] = [...chatMessages, { role: "user", content }];
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content,
+      timestamp: new Date()
+    };
+    const newMessages: Message[] = [...chatMessages, userMessage];
     setChatMessages(newMessages);
 
     // Simulate AI response with delay
     setIsChatLoading(true);
-    setTimeout(() => {
-      const aiResponse: Message = {
-        role: "assistant",
-        content: `This is a **demo response**. In a real app, you would call a tRPC mutation here:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nYour message was: "${content}"`,
-      };
-      setChatMessages([...newMessages, aiResponse]);
-      setIsChatLoading(false);
-    }, 1500);
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const response = `This is a **demo response**. In a real app, you would call a tRPC mutation here:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nYour message was: "${content}"`;
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response,
+          timestamp: new Date(),
+        };
+        setChatMessages([...newMessages, aiResponse]);
+        setIsChatLoading(false);
+        resolve(response);
+      }, 1500);
+    });
   };
 
   return (
@@ -782,7 +794,7 @@ export default function ComponentsShowcase() {
                     <TableCaption>A list of your recent invoices.</TableCaption>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[100px]">Invoice</TableHead>
+                        <TableHead className="w-50">Invoice</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
@@ -1269,7 +1281,7 @@ export default function ComponentsShowcase() {
                 <Separator />
                 <div className="space-y-2">
                   <Label>Scroll Area</Label>
-                  <ScrollArea className="h-[200px] w-full rounded-md border overflow-hidden">
+                  <ScrollArea className="h-50 w-full rounded-md border overflow-hidden">
                     <div className="p-4">
                       <div className="space-y-4">
                         {Array.from({ length: 20 }).map((_, i) => (
@@ -1292,7 +1304,7 @@ export default function ComponentsShowcase() {
               <CardContent className="pt-6">
                 <ResizablePanelGroup
                   direction="horizontal"
-                  className="min-h-[200px] rounded-lg border"
+                  className="min-h-50 rounded-lg border"
                 >
                   <ResizablePanel defaultSize={50}>
                     <div className="flex h-full items-center justify-center p-6">
@@ -1407,18 +1419,11 @@ export default function ComponentsShowcase() {
                     </p>
                   </div>
                   <AIChatBox
+                    isOpen={true}
+                    onClose={() => {}}
                     messages={chatMessages}
                     onSendMessage={handleChatSend}
                     isLoading={isChatLoading}
-                    placeholder="Try sending a message..."
-                    height="500px"
-                    emptyStateMessage="How can I help you today?"
-                    suggestedPrompts={[
-                      "What is React?",
-                      "Explain TypeScript",
-                      "How to use tRPC?",
-                      "Best practices for web development",
-                    ]}
                   />
                 </div>
               </CardContent>

@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingCart, ChevronLeft, Plus } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 
 /**
  * Products listing page with search, filtering, and pagination
@@ -22,7 +24,7 @@ export default function Products() {
   const [maxPrice, setMaxPrice] = useState("");
 
   // Fetch products
-  const { data: productsData, isLoading } = trpc.products.list.useQuery({
+  const { data: productsData, isLoading, error } = trpc.products.list.useQuery({
     search: search || undefined,
     category: category || undefined,
     minPrice: minPrice ? parseFloat(minPrice) : undefined,
@@ -35,11 +37,10 @@ export default function Products() {
   // Add to cart mutation
   const addToCartMutation = trpc.cart.addItem.useMutation({
     onSuccess: () => {
-      // Show success toast
-      alert("Added to cart!");
+      toast.success("Added to cart successfully!");
     },
     onError: (error) => {
-      alert(`Error: ${error.message}`);
+      toast.error(`Failed to add to cart: ${error.message}`);
     },
   });
 
@@ -200,59 +201,103 @@ export default function Products() {
                   Clear Filters
                 </Button>
               </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <div className="text-red-500 mb-4">
+                  <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load products</h3>
+                <p className="text-gray-500 mb-4">
+                  {error?.message || "Something went wrong while loading the products."}
+                </p>
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  {productsData?.products.map((product) => (
-                    <Card
-                      key={product.id}
-                      className="overflow-hidden hover:shadow-lg transition-shadow"
-                    >
-                      <div
-                        className="bg-gradient-to-br from-slate-200 to-slate-300 h-48 flex items-center justify-center cursor-pointer"
-                        onClick={() => setLocation(`/product/${product.id}`)}
+                  {isLoading ? (
+                    // Loading skeletons
+                    Array.from({ length: 6 }, (_, i) => (
+                      <Card key={i} className="overflow-hidden">
+                        <Skeleton className="h-48 w-full" />
+                        <CardHeader>
+                          <Skeleton className="h-6 w-3/4 mb-2" />
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-2/3" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex justify-between items-center mb-4">
+                            <Skeleton className="h-8 w-20" />
+                            <Skeleton className="h-4 w-16" />
+                          </div>
+                          <Skeleton className="h-10 w-full" />
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    productsData?.products.map((product) => (
+                      <Card
+                        key={product.id}
+                        className="overflow-hidden hover:shadow-lg transition-shadow"
                       >
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <ShoppingCart className="w-12 h-12 text-slate-400" />
-                        )}
-                      </div>
-                      <CardHeader>
-                        <CardTitle
-                          className="line-clamp-2 cursor-pointer hover:text-blue-600"
-                          onClick={() => setLocation(`/product/${product.id}`)}
-                        >
-                          {product.name}
-                        </CardTitle>
-                        <CardDescription className="line-clamp-2">
-                          {product.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="text-2xl font-bold text-blue-600">
-                            ${typeof product.price === 'string' ? product.price : String(product.price)}
-                          </span>
-                          <span className="text-sm text-slate-600">
-                            {product.stock > 0 ? `${product.stock} left` : "Out of stock"}
-                          </span>
+                        <div
+                          className="bg-linear-to-br from-slate-200 to-slate-300 h-48 flex items-center justify-center cursor-pointer"
+                          onClick={() => setLocation(`/products/${product.id}`)}                        role="button"
+                        tabIndex={0}
+                        aria-label={`View details for ${product.name}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setLocation(`/products/${product.id}`);
+                          }
+                        }}                        >
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ShoppingCart className="w-12 h-12 text-slate-400" />
+                          )}
                         </div>
-                        <Button
-                          className="w-full"
-                          disabled={product.stock === 0 || addToCartMutation.isPending}
-                          onClick={() => handleAddToCart(product.id)}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add to Cart
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        <CardHeader>
+                          <CardTitle
+                            className="line-clamp-2 cursor-pointer hover:text-blue-600"
+                            onClick={() => setLocation(`/products/${product.id}`)}
+                          >
+                            {product.name}
+                          </CardTitle>
+                          <CardDescription className="line-clamp-2">
+                            {product.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-2xl font-bold text-blue-600">
+                              ${typeof product.price === 'string' ? product.price : String(product.price)}
+                            </span>
+                            <span className="text-sm text-slate-600">
+                              {product.stock > 0 ? `${product.stock} left` : "Out of stock"}
+                            </span>
+                          </div>
+                          <Button
+                            className="w-full"
+                            disabled={product.stock === 0 || addToCartMutation.isPending}
+                            onClick={() => handleAddToCart(product.id)}
+                            aria-label={product.stock === 0 ? `Out of stock: ${product.name}` : `Add ${product.name} to cart`}
+                          >
+                            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                            {addToCartMutation.isPending ? "Adding..." : "Add to Cart"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
 
                 {/* Pagination */}

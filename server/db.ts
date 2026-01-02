@@ -2,6 +2,7 @@ import { eq, and, gte, lte, like, desc, asc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, products, cartItems, orders, orderItems, inventory } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { Cache, CACHE_KEYS, CACHE_TTL } from './_core/cache';
 import type { Product, InsertProduct, CartItem, InsertCartItem, Order, InsertOrder, OrderItem, InsertOrderItem, Inventory } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -137,11 +138,31 @@ export async function deleteProduct(id: number): Promise<void> {
 }
 
 export async function getProductById(id: number): Promise<Product | undefined> {
+  const cache = await Cache.getInstance();
+  const cacheKey = CACHE_KEYS.PRODUCT_DETAIL(id);
+
+  // Try cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      console.warn('[Cache] Failed to parse cached product:', error);
+    }
+  }
+
   const db = await getDb();
   if (!db) return undefined;
   
   const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  const product = result.length > 0 ? result[0] : undefined;
+
+  // Cache the result if found
+  if (product) {
+    await cache.set(cacheKey, JSON.stringify(product), CACHE_TTL.PRODUCT_DETAIL);
+  }
+
+  return product;
 }
 
 export async function getProducts(opts: {
@@ -153,6 +174,19 @@ export async function getProducts(opts: {
   page?: number;
   limit?: number;
 } = {}): Promise<{ products: Product[]; total: number }> {
+  const cache = await Cache.getInstance();
+  const cacheKey = CACHE_KEYS.PRODUCTS_LIST(opts);
+
+  // Try to get from cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      console.warn('[Cache] Failed to parse cached products:', error);
+    }
+  }
+
   const db = await getDb();
   if (!db) return { products: [], total: 0 };
   
@@ -197,8 +231,13 @@ export async function getProducts(opts: {
   // Get total count
   const countResult = await db.select({ count: sql`COUNT(*)` }).from(products).where(and(...conditions));
   const total = countResult[0]?.count as number || 0;
-  
-  return { products: results, total };
+
+  const result = { products: results, total };
+
+  // Cache the result
+  await cache.set(cacheKey, JSON.stringify(result), CACHE_TTL.PRODUCTS_LIST);
+
+  return result;
 }
 
 export async function getProductsByCategory(category: string): Promise<Product[]> {
@@ -229,12 +268,22 @@ export async function addToCart(userId: number, productId: number, quantity: num
       .where(eq(cartItems.id, existing[0].id));
     
     const updated = await db.select().from(cartItems).where(eq(cartItems.id, existing[0].id)).limit(1);
+    
+    // Invalidate cart cache
+    const cache = await Cache.getInstance();
+    await cache.del(CACHE_KEYS.USER_CART(userId));
+    
     return updated[0];
   }
   
   // Create new cart item
   const result = await db.insert(cartItems).values({ userId, productId, quantity });
   const created = await db.select().from(cartItems).where(eq(cartItems.id, Number(result[0].insertId))).limit(1);
+  
+  // Invalidate cart cache
+  const cache = await Cache.getInstance();
+  await cache.del(CACHE_KEYS.USER_CART(userId));
+  
   return created[0];
 }
 
@@ -251,6 +300,10 @@ export async function updateCartItem(userId: number, productId: number, quantity
       .set({ quantity })
       .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
   }
+
+  // Invalidate cart cache
+  const cache = await Cache.getInstance();
+  await cache.del(CACHE_KEYS.USER_CART(userId));
 }
 
 export async function removeFromCart(userId: number, productId: number): Promise<void> {
@@ -259,13 +312,35 @@ export async function removeFromCart(userId: number, productId: number): Promise
   
   await db.delete(cartItems)
     .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
+
+  // Invalidate cart cache
+  const cache = await Cache.getInstance();
+  await cache.del(CACHE_KEYS.USER_CART(userId));
 }
 
 export async function getCart(userId: number): Promise<CartItem[]> {
+  const cache = await Cache.getInstance();
+  const cacheKey = CACHE_KEYS.USER_CART(userId);
+
+  // Try cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      console.warn('[Cache] Failed to parse cached cart:', error);
+    }
+  }
+
   const db = await getDb();
   if (!db) return [];
   
-  return db.select().from(cartItems).where(eq(cartItems.userId, userId));
+  const cart = await db.select().from(cartItems).where(eq(cartItems.userId, userId));
+
+  // Cache the result
+  await cache.set(cacheKey, JSON.stringify(cart), CACHE_TTL.USER_CART);
+
+  return cart;
 }
 
 export async function clearCart(userId: number): Promise<void> {
@@ -273,6 +348,10 @@ export async function clearCart(userId: number): Promise<void> {
   if (!db) throw new Error("Database not available");
   
   await db.delete(cartItems).where(eq(cartItems.userId, userId));
+
+  // Invalidate cart cache
+  const cache = await Cache.getInstance();
+  await cache.del(CACHE_KEYS.USER_CART(userId));
 }
 
 /**
@@ -298,11 +377,28 @@ export async function updateOrderStatus(orderId: number, status: 'pending' | 'pr
   return result[0];
 }
 
+export async function updateOrder(orderId: number, updates: Partial<Order>): Promise<Order> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(orders).set(updates).where(eq(orders.id, orderId));
+  const result = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  return result[0];
+}
+
 export async function getOrderById(orderId: number): Promise<Order | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   
   const result = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getOrderByPaymentIntentId(paymentIntentId: string): Promise<Order | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(orders).where(eq(orders.stripePaymentIntentId, paymentIntentId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -372,4 +468,34 @@ export async function getAvailableStock(productId: number): Promise<number> {
   if (!product || !inv) return 0;
   
   return product.stock - inv.reserved;
+}
+
+/**
+ * Admin Dashboard Functions
+ */
+export async function getTotalProducts(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ count: sql<number>`count(*)` }).from(products).where(eq(products.isActive, true));
+  return result[0]?.count || 0;
+}
+
+export async function getTotalOrders(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ count: sql<number>`count(*)` }).from(orders);
+  return result[0]?.count || 0;
+}
+
+export async function getTotalRevenue(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ 
+    total: sql<number>`sum(cast(${orders.totalAmount} as decimal(10,2)))` 
+  }).from(orders).where(eq(orders.status, 'completed'));
+  
+  return result[0]?.total || 0;
 }
