@@ -156,14 +156,9 @@ app.use(
 );
 
 // Configuration for local development vs production serving
-async function configureServing() {
-  if (process.env.NODE_ENV === "development") {
-    // In production environment (like Vercel), setupVite is not needed
-    // as Vercel serves static files via the build output.
-    // However, we handle static serving locally or for custom production deployments.
-  } else {
-    serveStatic(app);
-  }
+// On Vercel, we need to ensure the static routes are registered
+if (process.env.NODE_ENV !== "development") {
+  serveStatic(app);
 }
 
 // Port finding and listener logic (only runs locally)
@@ -202,7 +197,6 @@ async function startLocalServer() {
     });
   } else {
     // Production standalone mode
-    configureServing();
     const server = createServer(app);
     const preferredPort = parseInt(process.env.PORT || "3000");
     const port = await findAvailablePort(preferredPort);
