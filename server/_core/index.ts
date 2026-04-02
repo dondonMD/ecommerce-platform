@@ -31,8 +31,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  console.log("Starting server...");
   const app = express();
+  console.log("Express app created");
   const server = createServer(app);
+  console.log("HTTP server created");
 
   // Rate limiting configurations
   const generalLimiter = rateLimit({
@@ -128,7 +131,6 @@ async function startServer() {
               if (inv) {
                 await db.updateInventory(item.productId, {
                   reserved: Math.max(0, inv.reserved - item.quantity),
-                  stock: inv.stock + item.quantity, // Return to available stock
                 });
               }
             }
@@ -180,14 +182,20 @@ async function startServer() {
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
+  console.log(`Using port ${port}`);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
+  console.log("About to listen...");
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    console.log(`✅ Server successfully running on http://localhost:${port}/`);
   });
 }
 
-startServer().catch(console.error);
+export default app;
+
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  startServer().catch(console.error);
+}

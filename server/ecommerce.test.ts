@@ -41,10 +41,10 @@ function createMockContext(role: 'admin' | 'user' = 'user'): TrpcContext {
     req: {
       protocol: "https",
       headers: {},
-    } as TrpcContext["req"],
+    } as any,
     res: {
       clearCookie: () => {},
-    } as TrpcContext["res"],
+    } as any,
   };
 }
 
@@ -100,6 +100,8 @@ describe("E-Commerce Platform", () => {
         // Expected since database is mocked to be unavailable
         expect(error.code).toBe("INTERNAL_SERVER_ERROR");
       }
+    });
+
     it("should filter products by search term", async () => {
       const caller = appRouter.createCaller(createMockContext());
 

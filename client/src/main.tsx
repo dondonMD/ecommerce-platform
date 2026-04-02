@@ -46,6 +46,13 @@ const trpcClient = trpc.createClient({
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+        }).catch((error) => {
+          // If backend is not available, return a mock response to prevent app crash
+          console.warn("Backend not available:", error.message);
+          return new Response(JSON.stringify({ error: "Backend not available" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
         });
       },
     }),

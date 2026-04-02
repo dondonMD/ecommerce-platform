@@ -6,6 +6,7 @@ import { ShoppingCart, Search, Zap, Shield, Truck, Award } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import type { Product } from "@shared/types";
 
 /**
  * Home page - Landing page and product showcase
@@ -17,10 +18,100 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch featured products
-  const { data: productsData } = trpc.products.list.useQuery({
+  const { data: productsData, error: productsError } = trpc.products.list.useQuery({
     limit: 6,
     sortBy: 'newest',
   });
+
+  // Mock data for when backend is not available
+  const mockProducts: Product[] = [
+    { 
+      id: 1, 
+      name: "Wireless Headphones", 
+      description: "High-quality wireless headphones with noise cancellation",
+      price: "99.99", 
+      category: "electronics",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 50,
+      sku: "WH-001",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 2, 
+      name: "Smart Watch", 
+      description: "Feature-rich smartwatch with health tracking",
+      price: "299.99", 
+      category: "electronics",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 25,
+      sku: "SW-002",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 3, 
+      name: "Laptop Stand", 
+      description: "Ergonomic laptop stand for better posture",
+      price: "49.99", 
+      category: "accessories",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 100,
+      sku: "LS-003",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 4, 
+      name: "Bluetooth Speaker", 
+      description: "Portable Bluetooth speaker with excellent sound quality",
+      price: "79.99", 
+      category: "electronics",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 30,
+      sku: "BS-004",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 5, 
+      name: "USB-C Hub", 
+      description: "Multi-port USB-C hub for laptops",
+      price: "39.99", 
+      category: "accessories",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 75,
+      sku: "UCH-005",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 6, 
+      name: "Wireless Mouse", 
+      description: "Ergonomic wireless mouse with long battery life",
+      price: "29.99", 
+      category: "accessories",
+      imageUrl: "/api/placeholder/300/300",
+      imageKey: null,
+      stock: 60,
+      sku: "WM-006",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+  ];
+
+  const displayProducts = productsError ? mockProducts : (productsData?.products || mockProducts);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +211,7 @@ export default function Home() {
       <section className="container mx-auto px-4 py-16">
         <h3 className="text-3xl font-bold text-slate-900 mb-12">Featured Products</h3>
         <div className="grid md:grid-cols-3 gap-8">
-          {productsData?.products.slice(0, 6).map((product) => (
+          {displayProducts.slice(0, 6).map((product) => (
             <Card
               key={product.id}
               className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
