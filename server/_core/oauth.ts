@@ -1,16 +1,16 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import express from "express";
+import express, { Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
-function getQueryParam(req: any, key: string): string | undefined {
+function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
   return typeof value === "string" ? value : undefined;
 }
 
 export function registerOAuthRoutes(app: ReturnType<typeof express>) {
-  app.get("/api/oauth/callback", async (req: any, res: any) => {
+  app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
 

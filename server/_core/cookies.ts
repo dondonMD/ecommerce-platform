@@ -1,4 +1,4 @@
-import express from "express";
+import { Request } from "express";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -8,7 +8,7 @@ function isIpAddress(host: string) {
   return host.includes(":");
 }
 
-function isSecureRequest(req: any) {
+function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
 
   const forwardedProto = req.headers["x-forwarded-proto"];
@@ -22,7 +22,7 @@ function isSecureRequest(req: any) {
 }
 
 export function getSessionCookieOptions(
-  req: any
+  req: Request
 ): {
   domain?: string;
   httpOnly: boolean;

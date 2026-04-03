@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
@@ -24,7 +24,7 @@ export async function setupVite(app: ExpressApp, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req: any, res: any, next: any) => {
+  app.use("*", async (req: Request, res: Response, next: NextFunction) => {
     const url = req.originalUrl;
 
     try {
@@ -65,7 +65,7 @@ export function serveStatic(app: ExpressApp) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req: any, res: any) => {
+  app.use("*", (_req: Request, res: Response) => {
     if (!fs.existsSync(indexPath)) {
       res.status(503).json({
         error: "Static client build is missing",
