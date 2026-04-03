@@ -8,8 +8,12 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { checkRedisHealth } from "./cache";
 import { serveStatic, setupVite } from "./vite";
 import * as db from "../db";
+
+type Request = express.Request;
+type Response = express.Response;
 
 const app = express();
 
@@ -44,7 +48,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Stripe webhook endpoint (needs raw body for signature verification)
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -139,8 +143,35 @@ app.use(generalLimiter);
 registerOAuthRoutes(app);
 
 // Health check endpoint (no rate limiting needed)
-app.get('/health', (req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: Date.now() });
+});
+
+app.get("/api/diagnostics", async (req: Request, res: Response) => {
+  const configuredToken = process.env.HEALTHCHECK_TOKEN;
+
+  if (configuredToken) {
+    const providedToken = req.header("x-healthcheck-token");
+    if (providedToken !== configuredToken) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+  }
+
+  const [database, redis] = await Promise.all([
+    db.checkDatabaseHealth(),
+    checkRedisHealth(),
+  ]);
+
+  const ok = database.ok;
+  const statusCode = ok ? 200 : 503;
+
+  res.status(statusCode).json({
+    ok,
+    database,
+    redis,
+    timestamp: Date.now(),
+    runtime: "vercel-node",
+  });
 });
 
 // Apply strict rate limiting to tRPC API

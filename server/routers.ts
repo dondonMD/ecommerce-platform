@@ -9,8 +9,10 @@ import { storagePut } from "./storage";
 import type { InsertProduct } from "../drizzle/schema";
 import Stripe from "stripe";
 
-// Initialize Stripe
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+function getStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  return secretKey ? new Stripe(secretKey) : null;
+}
 
 /**
  * Admin-only procedure for admin operations
@@ -348,6 +350,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const order = await db.getOrderById(input.orderId);
+        const stripe = getStripeClient();
         
         if (!order || order.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Order not found' });
@@ -394,6 +397,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const order = await db.getOrderById(input.orderId);
+        const stripe = getStripeClient();
         
         if (!order || order.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Order not found' });

@@ -1,25 +1,50 @@
-let redisClient: any | null = null;
+import { Redis } from "@upstash/redis";
+import { ENV } from "./env";
+
+let redisClient: Redis | null | undefined;
 
 /**
- * Initialize Redis client
+ * Initialize Upstash Redis lazily so cold starts do not block app boot.
  */
 export async function getRedisClient() {
-  if (!redisClient) {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-
-    try {
-      // Dynamic import to avoid issues in test environments
-      const { createClient } = await import('redis');
-      redisClient = createClient({ url: redisUrl });
-      redisClient.on('error', (err: any) => console.warn('[Redis] Client error:', err));
-      redisClient.on('connect', () => console.log('[Redis] Connected'));
-      await redisClient.connect();
-    } catch (error) {
-      console.warn('[Redis] Failed to connect:', error);
-      redisClient = null;
-    }
+  if (redisClient !== undefined) {
+    return redisClient;
   }
+
+  const url = ENV.upstashRedisRestUrl;
+  const token = ENV.upstashRedisRestToken;
+
+  if (!url || !token) {
+    console.warn("[Redis] Upstash REST credentials missing; caching is disabled.");
+    redisClient = null;
+    return redisClient;
+  }
+
+  redisClient = new Redis({ url, token });
   return redisClient;
+}
+
+export async function checkRedisHealth(timeoutMs = 2000) {
+  const client = await getRedisClient();
+  if (!client) {
+    return { ok: false as const, reason: "redis_not_configured" };
+  }
+
+  try {
+    await Promise.race([
+      client.ping(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("redis_timeout")), timeoutMs)
+      ),
+    ]);
+
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: error instanceof Error ? error.message : "redis_error",
+    };
+  }
 }
 
 /**
@@ -27,7 +52,7 @@ export async function getRedisClient() {
  */
 export class Cache {
   private static instance: Cache;
-  private client: any | null = null;
+  private client: Redis | null = null;
 
   private constructor() {}
 
@@ -42,9 +67,10 @@ export class Cache {
   async get(key: string): Promise<string | null> {
     if (!this.client) return null;
     try {
-      return await this.client.get(key);
+      const result = await this.client.get<string>(key);
+      return result ?? null;
     } catch (error) {
-      console.warn('[Cache] Get error:', error);
+      console.warn("[Cache] Get error:", error);
       return null;
     }
   }
@@ -53,12 +79,12 @@ export class Cache {
     if (!this.client) return;
     try {
       if (ttlSeconds) {
-        await this.client.setEx(key, ttlSeconds, value);
+        await this.client.set(key, value, { ex: ttlSeconds });
       } else {
         await this.client.set(key, value);
       }
     } catch (error) {
-      console.warn('[Cache] Set error:', error);
+      console.warn("[Cache] Set error:", error);
     }
   }
 
@@ -67,7 +93,7 @@ export class Cache {
     try {
       await this.client.del(key);
     } catch (error) {
-      console.warn('[Cache] Del error:', error);
+      console.warn("[Cache] Del error:", error);
     }
   }
 
@@ -77,7 +103,7 @@ export class Cache {
       const result = await this.client.exists(key);
       return result === 1;
     } catch (error) {
-      console.warn('[Cache] Exists error:', error);
+      console.warn("[Cache] Exists error:", error);
       return false;
     }
   }
@@ -87,10 +113,10 @@ export class Cache {
     try {
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
-        await this.client.del(keys);
+        await this.client.del(...keys);
       }
     } catch (error) {
-      console.warn('[Cache] Invalidate pattern error:', error);
+      console.warn("[Cache] Invalidate pattern error:", error);
     }
   }
 }
@@ -109,8 +135,8 @@ export const CACHE_KEYS = {
  * Cache TTL values (in seconds)
  */
 export const CACHE_TTL = {
-  PRODUCTS_LIST: 300, // 5 minutes
-  PRODUCT_DETAIL: 600, // 10 minutes
-  USER_CART: 1800, // 30 minutes
-  PRODUCT_INVENTORY: 60, // 1 minute
+  PRODUCTS_LIST: 300,
+  PRODUCT_DETAIL: 600,
+  USER_CART: 1800,
+  PRODUCT_INVENTORY: 60,
 } as const;

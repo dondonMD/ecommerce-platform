@@ -1,25 +1,137 @@
+import { connect } from "@tidbcloud/serverless";
 import { eq, and, gte, lte, like, desc, asc, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle as drizzleMysql } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
+import { drizzle as drizzleTidb } from "drizzle-orm/tidb-serverless";
 import { InsertUser, users, products, cartItems, orders, orderItems, inventory } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { Cache, CACHE_KEYS, CACHE_TTL } from './_core/cache';
 import type { Product, InsertProduct, CartItem, InsertCartItem, Order, InsertOrder, OrderItem, InsertOrderItem, Inventory } from "../drizzle/schema";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+type DbClient = ReturnType<typeof drizzleMysql> | ReturnType<typeof drizzleTidb> | any;
+
+let _db: DbClient | null = null;
+let _dbInitAttempted = false;
+
+function getInsertedId(result: unknown): number {
+  const value =
+    (result as any)?.insertId ??
+    (result as any)?.[0]?.insertId ??
+    (result as any)?.lastInsertRowid;
+
+  const id = Number(value);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Insert did not return a valid id");
+  }
+
+  return id;
+}
+
+function toNumber(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 0;
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 /**
- * Lazily create the drizzle instance so local tooling can run without a DB.
+ * Lazily create the drizzle instance so cold starts do not block app boot.
+ * Prefer TiDB's serverless HTTP driver in production when a valid URL is provided.
+ * Gracefully fall back to standard MySQL driver (mysql2) if TIDB_URL is missing or malformed.
  */
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+function getRuntimeDb(): DbClient | null {
+  if (_dbInitAttempted) {
+    return _db;
   }
+
+  _dbInitAttempted = true;
+
+  try {
+    // 1. Try TiDB Serverless HTTP driver first (if configured and valid)
+    if (ENV.tidbUrl && (ENV.tidbUrl.startsWith('https://') || ENV.tidbUrl.includes('tidbcloud.com'))) {
+      try {
+        console.log("[Database] Initializing with TiDB serverless driver...");
+        const client = connect({ url: ENV.tidbUrl });
+        _db = drizzleTidb({ client });
+        return _db;
+      } catch (error) {
+        console.warn("[Database] TiDB serverless initialization failed, trying fallback...", error);
+      }
+    }
+
+    // 2. Fall back to standard MySQL driver
+    if (ENV.databaseUrl) {
+      const isLocalhost = ENV.databaseUrl.includes('localhost') || ENV.databaseUrl.includes('127.0.0.1');
+      
+      if (process.env.VERCEL && isLocalhost) {
+        console.error("[Database] ❌ CRITICAL: DATABASE_URL points to localhost but app is running on Vercel. Please update your Vercel Environment Variables.");
+      }
+
+      if (ENV.databaseUrl.startsWith('mysql://')) {
+        console.log(`[Database] Initializing with standard MySQL driver (mysql2)... ${isLocalhost ? '(⚠️ LOCALHOST)' : ''}`);
+        
+        // For non-localhost connections (TiDB Cloud), we must ensure SSL is enabled
+        if (!isLocalhost) {
+          const pool = mysql.createPool({
+            uri: ENV.databaseUrl,
+            ssl: {
+              rejectUnauthorized: false,
+            },
+            waitForConnections: true,
+            connectionLimit: 10,
+            maxIdle: 10,
+            idleTimeout: 60000,
+            queueLimit: 0,
+          });
+          _db = drizzleMysql(pool);
+        } else {
+          _db = drizzleMysql(ENV.databaseUrl);
+        }
+        
+        return _db;
+      } else {
+        console.warn("[Database] DATABASE_URL format invalid (expected mysql://):", ENV.databaseUrl);
+      }
+    } else {
+      console.warn("[Database] No TiDB_URL or DATABASE_URL configured.");
+    }
+  } catch (error) {
+    console.error("[Database] Critical initialization error:", error);
+  }
+
+  _db = null;
   return _db;
+}
+
+export async function getDb(): Promise<DbClient | null> {
+  return getRuntimeDb();
+}
+
+export async function checkDatabaseHealth(timeoutMs = 3000) {
+  const db = await getDb();
+  if (!db) {
+    return { ok: false as const, reason: "database_not_configured" };
+  }
+
+  try {
+    await Promise.race([
+      db.execute(sql`select 1 as ok`),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("database_timeout")), timeoutMs)
+      ),
+    ]);
+
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: error instanceof Error ? error.message : "database_error",
+    };
+  }
 }
 
 /**
@@ -111,7 +223,7 @@ export async function createProduct(product: InsertProduct): Promise<Product> {
   if (!db) throw new Error("Database not available");
   
   const result = await db.insert(products).values(product);
-  const productId = result[0].insertId;
+  const productId = getInsertedId(result);
   
   // Initialize inventory for the product
   await db.insert(inventory).values({ productId: Number(productId) });
@@ -229,8 +341,11 @@ export async function getProducts(opts: {
   }
   
   // Get total count
-  const countResult = await db.select({ count: sql`COUNT(*)` }).from(products).where(and(...conditions));
-  const total = countResult[0]?.count as number || 0;
+  const countResult = await (db as any)
+    .select({ count: sql`COUNT(*)` })
+    .from(products)
+    .where(and(...conditions));
+  const total = toNumber(countResult[0]?.count);
 
   const result = { products: results, total };
 
@@ -278,7 +393,8 @@ export async function addToCart(userId: number, productId: number, quantity: num
   
   // Create new cart item
   const result = await db.insert(cartItems).values({ userId, productId, quantity });
-  const created = await db.select().from(cartItems).where(eq(cartItems.id, Number(result[0].insertId))).limit(1);
+  const cartItemId = getInsertedId(result);
+  const created = await db.select().from(cartItems).where(eq(cartItems.id, cartItemId)).limit(1);
   
   // Invalidate cart cache
   const cache = await Cache.getInstance();
@@ -362,7 +478,7 @@ export async function createOrder(order: InsertOrder): Promise<Order> {
   if (!db) throw new Error("Database not available");
   
   const result = await db.insert(orders).values(order);
-  const orderId = Number(result[0].insertId);
+  const orderId = getInsertedId(result);
   
   const created = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   return created[0];
@@ -413,8 +529,11 @@ export async function getUserOrders(userId: number, page = 1, limit = 10): Promi
     .limit(limit)
     .offset(offset);
   
-  const countResult = await db.select({ count: sql`COUNT(*)` }).from(orders).where(eq(orders.userId, userId));
-  const total = countResult[0]?.count as number || 0;
+  const countResult = await (db as any)
+    .select({ count: sql`COUNT(*)` })
+    .from(orders)
+    .where(eq(orders.userId, userId));
+  const total = toNumber(countResult[0]?.count);
   
   return { orders: results, total };
 }
@@ -424,7 +543,8 @@ export async function createOrderItem(item: InsertOrderItem): Promise<OrderItem>
   if (!db) throw new Error("Database not available");
   
   const result = await db.insert(orderItems).values(item);
-  const created = await db.select().from(orderItems).where(eq(orderItems.id, Number(result[0].insertId))).limit(1);
+  const orderItemId = getInsertedId(result);
+  const created = await db.select().from(orderItems).where(eq(orderItems.id, orderItemId)).limit(1);
   return created[0];
 }
 
@@ -477,25 +597,33 @@ export async function getTotalProducts(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   
-  const result = await db.select({ count: sql<number>`count(*)` }).from(products).where(eq(products.isActive, true));
-  return result[0]?.count || 0;
+  const result = await (db as any)
+    .select({ count: sql`count(*)` })
+    .from(products)
+    .where(eq(products.isActive, true));
+  return toNumber(result[0]?.count);
 }
 
 export async function getTotalOrders(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   
-  const result = await db.select({ count: sql<number>`count(*)` }).from(orders);
-  return result[0]?.count || 0;
+  const result = await (db as any)
+    .select({ count: sql`count(*)` })
+    .from(orders);
+  return toNumber(result[0]?.count);
 }
 
 export async function getTotalRevenue(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   
-  const result = await db.select({ 
-    total: sql<number>`sum(cast(${orders.totalAmount} as decimal(10,2)))` 
-  }).from(orders).where(eq(orders.status, 'completed'));
+  const result = await (db as any)
+    .select({
+      total: sql`sum(cast(${orders.totalAmount} as decimal(10,2)))`,
+    })
+    .from(orders)
+    .where(eq(orders.status, 'completed'));
   
-  return result[0]?.total || 0;
+  return toNumber(result[0]?.total);
 }

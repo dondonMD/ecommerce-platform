@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "framework": "vite",
+  "buildCommand": "pnpm exec vite build",
   "builds": [
     {
       "src": "server/_core/index.ts",
