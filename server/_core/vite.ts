@@ -25,7 +25,7 @@ export async function setupVite(app: ExpressApp, server: Server) {
 
   app.use(vite.middlewares);
   app.use("*", async (req: Request, res: Response, next: NextFunction) => {
-    const url = req.originalUrl;
+    const url = (req as any).originalUrl;
 
     try {
       const clientTemplate = path.resolve(
@@ -42,10 +42,10 @@ export async function setupVite(app: ExpressApp, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      (res as any).status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
-      next(e);
+      (next as any)(e);
     }
   });
 }
@@ -67,13 +67,13 @@ export function serveStatic(app: ExpressApp) {
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req: Request, res: Response) => {
     if (!fs.existsSync(indexPath)) {
-      res.status(503).json({
+      (res as any).status(503).json({
         error: "Static client build is missing",
         hint: "Run the Vite build before deploying so dist/public/index.html exists.",
       });
       return;
     }
 
-    res.sendFile(indexPath);
+    (res as any).sendFile(indexPath);
   });
 }

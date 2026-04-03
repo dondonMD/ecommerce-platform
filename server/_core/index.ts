@@ -47,22 +47,22 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Stripe webhook endpoint (needs raw body for signature verification)
 // Stripe webhook endpoint (needs raw body for signature verification)
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-  const sig = req.headers['stripe-signature'] as string;
+  const sig = (req as any).headers['stripe-signature'] as string;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!endpointSecret) {
     console.error('Stripe webhook secret not configured');
-    return res.status(500).json({ error: 'Webhook configuration error' });
+    return (res as any).status(500).json({ error: 'Webhook configuration error' });
   }
 
   let event: Stripe.Event;
 
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent((req as any).body, sig, endpointSecret);
   } catch (err: any) {
     console.error(`Webhook signature verification failed:`, err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    return (res as any).status(400).send(`Webhook Error: ${err.message}`);
   }
 
   // Handle the event
@@ -130,7 +130,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     res.json({ received: true });
   } catch (error) {
     console.error('Error processing webhook:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    (res as any).status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
@@ -143,7 +143,7 @@ registerOAuthRoutes(app);
 // Health check endpoint (no rate limiting needed)
 // Health check endpoint (no rate limiting needed)
 app.get('/health', (_req: Request, res: Response) => {
-  res.status(200).json({ status: 'ok', timestamp: Date.now() });
+  (res as any).status(200).json({ status: 'ok', timestamp: Date.now() });
 });
 
 app.get("/api/diagnostics", async (req: Request, res: Response) => {
@@ -152,7 +152,7 @@ app.get("/api/diagnostics", async (req: Request, res: Response) => {
   if (configuredToken) {
     const providedToken = req.header("x-healthcheck-token");
     if (providedToken !== configuredToken) {
-      return res.status(401).json({ error: "unauthorized" });
+      return (res as any).status(401).json({ error: "unauthorized" });
     }
   }
 
