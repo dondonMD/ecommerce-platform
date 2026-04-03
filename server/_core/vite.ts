@@ -5,9 +5,6 @@ import { nanoid } from "nanoid";
 import path from "path";
 
 type ExpressApp = ReturnType<typeof express>;
-type Request = express.Request;
-type Response = express.Response;
-type NextFunction = express.NextFunction;
 
 export async function setupVite(app: ExpressApp, server: Server) {
   const [{ createServer: createViteServer }, { default: viteConfig }] =
@@ -27,7 +24,7 @@ export async function setupVite(app: ExpressApp, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req: Request, res: Response, next: NextFunction) => {
+  app.use("*", async (req: any, res: any, next: any) => {
     const url = req.originalUrl;
 
     try {
@@ -68,7 +65,7 @@ export function serveStatic(app: ExpressApp) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req: Request, res: Response) => {
+  app.use("*", (_req: any, res: any) => {
     if (!fs.existsSync(indexPath)) {
       res.status(503).json({
         error: "Static client build is missing",
