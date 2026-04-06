@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { Request, Response } from "express";
+import express from "express";
 import { createServer } from "http";
 import net from "net";
 import rateLimit from "express-rate-limit";
@@ -46,7 +46,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Stripe webhook endpoint (needs raw body for signature verification)
 // Stripe webhook endpoint (needs raw body for signature verification)
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = (req as any).headers['stripe-signature'] as string;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -142,11 +142,11 @@ registerOAuthRoutes(app);
 
 // Health check endpoint (no rate limiting needed)
 // Health check endpoint (no rate limiting needed)
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/health', (_req, res) => {
   (res as any).status(200).json({ status: 'ok', timestamp: Date.now() });
 });
 
-app.get("/api/diagnostics", async (req: Request, res: Response) => {
+app.get("/api/diagnostics", async (req, res) => {
   const configuredToken = process.env.HEALTHCHECK_TOKEN;
 
   if (configuredToken) {
