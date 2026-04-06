@@ -46,7 +46,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Stripe webhook endpoint (needs raw body for signature verification)
 // Stripe webhook endpoint (needs raw body for signature verification)
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req: any, res: any) => {
   const sig = (req as any).headers['stripe-signature'] as string;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -142,11 +142,11 @@ registerOAuthRoutes(app);
 
 // Health check endpoint (no rate limiting needed)
 // Health check endpoint (no rate limiting needed)
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: any, res: any) => {
   (res as any).status(200).json({ status: 'ok', timestamp: Date.now() });
 });
 
-app.get("/api/diagnostics", async (req, res) => {
+app.get("/api/diagnostics", async (req: any, res: any) => {
   const configuredToken = process.env.HEALTHCHECK_TOKEN;
 
   if (configuredToken) {

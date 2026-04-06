@@ -24,7 +24,7 @@ export async function setupVite(app: ExpressApp, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
+  app.use("*", async (req: any, res: any, next: any) => {
     const url = (req as any).originalUrl;
 
     try {
@@ -65,7 +65,7 @@ export function serveStatic(app: ExpressApp) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  app.use("*", (_req: any, res: any) => {
     if (!fs.existsSync(indexPath)) {
       (res as any).status(503).json({
         error: "Static client build is missing",

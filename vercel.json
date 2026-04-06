@@ -9,15 +9,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "/api"
     },
     {
       "source": "/health",
-      "destination": "/api/index"
+      "destination": "/api"
     },
     {
       "source": "/(.*)",
-      "destination": "/api/index"
+      "destination": "/api"
     }
   ],
   "env": {
