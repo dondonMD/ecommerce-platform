@@ -51,7 +51,7 @@ export async function setupVite(app: ExpressApp, server: Server) {
 }
 
 export function serveStatic(app: ExpressApp) {
-  const distPath = path.resolve(process.cwd(), "dist", "public");
+  const distPath = path.resolve(process.cwd(), "public");
   const indexPath = path.resolve(distPath, "index.html");
   
   if (!fs.existsSync(distPath)) {
@@ -69,7 +69,7 @@ export function serveStatic(app: ExpressApp) {
     if (!fs.existsSync(indexPath)) {
       (res as any).status(503).json({
         error: "Static client build is missing",
-        hint: "Run the Vite build before deploying so dist/public/index.html exists.",
+        hint: "Run the Vite build before deploying so public/index.html exists.",
       });
       return;
     }

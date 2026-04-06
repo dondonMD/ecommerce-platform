@@ -1,25 +1,5 @@
 {
-  "version": 2,
   "buildCommand": "pnpm run build",
-  "functions": {
-    "api/index.ts": {
-      "includeFiles": "dist/public/**"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/health",
-      "destination": "/api"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/api"
-    }
-  ],
   "env": {
     "NODE_ENV": "production"
   }
